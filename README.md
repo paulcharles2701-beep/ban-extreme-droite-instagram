@@ -14,8 +14,8 @@ Le script est écrit en Python et utilise [Playwright](https://playwright.dev/) 
 2. Installez [Google Chrome](https://www.google.com/chrome/) s'il n'est pas déjà présent.
 3. Clonez le dépôt et installez Playwright :
    ```bash
-   git clone <url-du-depot>
-   cd <nom-du-depot>
+   git clone https://github.com/paulcharles2701-beep/ban-extreme-droite-instagram
+   cd ban-extreme-droite-instagram
    pip install playwright
    ```
 
