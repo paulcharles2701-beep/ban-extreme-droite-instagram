@@ -1,3 +1,5 @@
-*.png
-ig_session
+ig_session/
 resultats.csv
+comptes_perso.txt
+erreur_*.png
+__pycache__/
