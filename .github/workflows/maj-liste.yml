@@ -1,0 +1,42 @@
+name: Mise à jour de la liste des comptes
+
+on:
+  schedule:
+    # GitHub utilise l'heure UTC : 22h UTC = 00h à Paris (heure d'été)
+    - cron: "0 22 * * *"
+  workflow_dispatch:   # permet aussi un lancement manuel depuis l'onglet Actions
+
+permissions:
+  contents: write      # nécessaire pour pousser le commit
+
+jobs:
+  maj-liste:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer Playwright
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Extraire la liste
+        run: python extraire_liste.py
+
+      - name: Committer si la liste a changé
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git add comptes.txt comptes.json
+          if git diff --staged --quiet; then
+            echo "Aucun changement dans la liste."
+          else
+            git commit -m "Mise à jour de la liste ($(date -u +'%Y-%m-%d'))"
+            git push
+          fi

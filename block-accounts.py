@@ -9,7 +9,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 # ---------------- Configuration ----------------
-FICHIER_COMPTES = "comptes.txt"
+FICHIERS_COMPTES = ["comptes.txt", "comptes_perso.txt"]
 FICHIER_RESULTATS = "resultats.csv"
 DOSSIER_SESSION = "./ig_session"
 DELAI_MIN, DELAI_MAX = 8, 20     # secondes entre deux comptes
@@ -38,10 +38,14 @@ def normaliser(ligne: str) -> str | None:
 
 def charger_comptes() -> list[str]:
     comptes = []
-    for l in Path(FICHIER_COMPTES).read_text(encoding="utf-8").splitlines():
-        u = normaliser(l)
-        if u and u not in comptes:
-            comptes.append(u)
+    for fichier in FICHIERS_COMPTES:
+        chemin = Path(fichier)
+        if not chemin.exists():
+            continue
+        for l in chemin.read_text(encoding="utf-8").splitlines():
+            u = normaliser(l)
+            if u and u not in comptes:
+                comptes.append(u)
     return comptes
 
 
