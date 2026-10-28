@@ -6,35 +6,55 @@ https://www.instagram.com/p/DfCaZQxCIPr/
 
 L'idée de ce projet est de faciliter le blocage de ces comptes en automatisant le processus sur Instagram. Je trouvais assez fastidieux de le faire manuellement pour chaque compte. Ce script permet de gagner du temps et de s'assurer que les comptes restent bien bloqués, d'autant qu'Instagram débloque parfois périodiquement des comptes que vous aviez bloqués.
 
-Le script est écrit en Python et utilise [Playwright](https://playwright.dev/) pour automatiser les interactions avec Instagram. Le fichier `comptes.txt` contient la liste des comptes à bloquer, un par ligne. Pour l'instant, la liste provient de listes partagées sur Instagram et du site [onbloquelextremedroite.fr](https://www.onbloquelextremedroite.fr/liste), mais vous pouvez y ajouter vos propres comptes. N'hésitez pas à proposer des modifications ou des ajouts au projet.
+Le script est écrit en Python et utilise [Playwright](https://playwright.dev/) pour automatiser les interactions avec Instagram. Le fichier `comptes.txt` contient la liste des comptes à bloquer, un par ligne. Elle provient de listes partagées sur Instagram et du site [onbloquelextremedroite.fr](https://www.onbloquelextremedroite.fr/liste). Vous pouvez aussi ajouter vos propres comptes (voir plus bas). N'hésitez pas à proposer des modifications ou des ajouts au projet.
 
 ### Installation
 
-1. Assurez-vous d'avoir Python installé sur votre machine.
-2. Installez les dépendances :
+1. Assurez-vous d'avoir [Python](https://www.python.org/downloads/) installé sur votre machine.
+2. Installez [Google Chrome](https://www.google.com/chrome/) s'il n'est pas déjà présent.
+3. Clonez le dépôt et installez Playwright :
    ```bash
+   git clone <url-du-depot>
+   cd <nom-du-depot>
    pip install playwright
-   python -m playwright install chromium
    ```
 
 ### Utilisation
 
-1. *(Optionnel)* Mettez à jour la liste depuis le site :
+1. Récupérez la dernière version de la liste :
    ```bash
-   python extraire_liste.py
+   git pull
    ```
-   Le fichier `comptes.txt` est régénéré, avec les comptes regroupés par catégorie.
 
 2. Lancez le blocage :
    ```bash
    python block-accounts.py
    ```
 
-Une fenêtre de navigateur s'ouvre. Connectez-vous à votre compte Instagram, puis le script bloque automatiquement les comptes de `comptes.txt`.
+Une fenêtre Chrome s'ouvre. Au premier lancement, connectez-vous à votre compte Instagram, puis appuyez sur Entrée dans le terminal. La session est ensuite mémorisée : vous n'aurez plus à vous reconnecter lors des exécutions suivantes.
+
+⏱️ **Une exécution dure environ 10 minutes.** Le script marque volontairement des pauses entre chaque compte pour imiter un comportement humain. Vous pouvez laisser la fenêtre ouverte en arrière-plan, mais ne la fermez pas pendant l'exécution.
+
+### Une liste mise à jour automatiquement
+
+La liste `comptes.txt` est **mise à jour automatiquement toutes les 24 heures, à 00h** (heure de Paris), grâce à une GitHub Action. Celle-ci récupère les comptes publiés sur [onbloquelextremedroite.fr](https://www.onbloquelextremedroite.fr/liste) et committe la nouvelle liste si elle a changé.
+
+Pour en profiter, faites simplement un `git pull` avant de lancer le script. Les nouveaux comptes seront bloqués lors de l'exécution, et ceux déjà bloqués ne seront pas retraités.
+
+### Ajouter vos propres comptes
+
+Ne modifiez pas `comptes.txt` : il est réécrit à chaque mise à jour automatique. Créez plutôt un fichier `comptes_perso.txt` à la racine du projet, avec un compte par ligne :
+
+```
+@un_compte
+https://www.instagram.com/un_autre_compte/
+```
+
+Ce fichier est lu en plus de la liste commune, et il est ignoré par Git : il reste sur votre machine.
 
 ### Un blocage réparti sur plusieurs jours
 
-Bloquer beaucoup de comptes d'un coup peut amener Instagram à considérer votre activité comme suspecte, et à restreindre temporairement votre compte. Le script limite donc le nombre de blocages à **30 par jour** (paramètre `MAX_PAR_JOUR`). La liste actuelle d'environ 110 comptes est ainsi traitée en **4 jours**.
+Bloquer beaucoup de comptes d'un coup peut amener Instagram à considérer votre activité comme suspecte, et à restreindre temporairement votre compte. Le script limite donc le nombre de blocages à **30 par jour** (paramètre `MAX_PAR_JOUR`). La liste actuelle d'environ 110 comptes est ainsi traitée en **4 jours**, à raison d'environ 10 minutes par jour.
 
 Il suffit de **relancer le script une fois par jour** :
 
@@ -69,8 +89,30 @@ Les paramètres se trouvent en haut de `block-accounts.py` :
 
 Il est déconseillé d'augmenter fortement `MAX_PAR_JOUR` ou de réduire les délais.
 
+### Fichiers du projet
+
+| Fichier | Rôle |
+|---|---|
+| `block-accounts.py` | Script de blocage |
+| `extraire_liste.py` | Extraction des comptes depuis le site (lancé automatiquement chaque nuit) |
+| `comptes.txt` | Liste commune, mise à jour automatiquement |
+| `comptes.json` | Liste commune avec les détails (nom, catégorie, photo…) |
+| `comptes_perso.txt` | Vos comptes personnels *(à créer, non versionné)* |
+| `resultats.csv` | Historique de vos blocages *(généré, non versionné)* |
+| `ig_session/` | Votre session Instagram *(générée, non versionnée)* |
+
 ### En cas de problème
 
 - **« Réessayez plus tard »** : Instagram limite temporairement vos actions. Le script s'arrête de lui-même. Attendez au moins 24 h avant de relancer.
 - **Un compte en erreur** : une capture d'écran `erreur_<compte>.png` est créée. Le compte sera retenté au prochain lancement.
-- **Recommencer de zéro** : supprimez `resultats.csv`
+- **Problème de connexion** : supprimez le dossier `ig_session/` et relancez le script pour vous reconnecter.
+- **Recommencer de zéro** : supprimez `resultats.csv`.
+
+### Pour les contributeurs
+
+La mise à jour de la liste est gérée par le workflow `.github/workflows/maj-liste.yml`. Il peut être lancé manuellement depuis l'onglet *Actions* du dépôt (*Run workflow*). Pour mettre à jour la liste en local :
+
+```bash
+python -m playwright install chromium
+python extraire_liste.py
+```
