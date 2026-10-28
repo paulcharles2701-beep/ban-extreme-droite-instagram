@@ -1,4 +1,4 @@
-# Personnalités (63)
+# Personnalités (68)
 @emmanuelmacron
 @realdonaldtrump
 @marine_lepen
@@ -44,6 +44,11 @@
 @laurentwauquiez
 @louis_aliot
 @seblecornu
+@gwgoldnadel
+@obertoneofficiel
+@geoffroy_lejeune
+@eugeniebastieofficiel
+@marsaultbreum
 @helenelaportern
 @yannickneuder
 @christelledintorni
@@ -63,7 +68,7 @@
 @maud.bregeon
 @yael.braunpivet
 
-# La fachosphère (15)
+# La fachosphère (20)
 @milafique
 @louisemontangon
 @ugogiljimenez
@@ -78,9 +83,14 @@
 @le_bracq
 @mathilda_nemesis
 @marguerite_stern
+@nicolasfaure.sunrise
+@valekmaranaj
+@raptorpodcast
+@vincent.lapierre
+@adlaurent_fit
 @tasjoui
 
-# Partis, médias et collectifs (31)
+# Partis, médias et collectifs (36)
 @rassemblementnational_fr
 @frontieresmedia
 @cnews
@@ -100,6 +110,11 @@
 @id_libertes
 @objectifremigration
 @le_jdd
+@europe1
+@causeur.fr
+@bastionmediafr
+@patriotsep
+@patriotseu
 @groupern
 @droiteuniv
 @generation_zemmour
