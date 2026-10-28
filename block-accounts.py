@@ -1,8 +1,9 @@
 import csv
+import math
 import random
 import re
 import time
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -10,11 +11,14 @@ from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 # ---------------- Configuration ----------------
 FICHIER_COMPTES = "comptes.txt"
 FICHIER_RESULTATS = "resultats.csv"
-DOSSIER_SESSION = "./ig_session"     # profil navigateur persistant
-DELAI_MIN, DELAI_MAX = 8, 20          # secondes entre deux comptes
-MAX_PAR_SESSION = 40                  # éviter de dépasser les limites d'Instagram
-HEADLESS = False                      # garder False pour la première connexion
+DOSSIER_SESSION = "./ig_session"
+DELAI_MIN, DELAI_MAX = 8, 20     # secondes entre deux comptes
+MAX_PAR_JOUR = 30                # blocages effectifs maximum par jour
+REVERIF_JOURS = 30               # revérifier un compte bloqué au bout de N jours
+HEADLESS = False
 # ------------------------------------------------
+
+STATUTS_OK = ("bloqué", "déjà bloqué", "introuvable")
 
 # Regex FR + EN pour être robuste à la langue de l'interface
 RE_BLOQUER = re.compile(r"^(Bloquer|Block)$", re.I)
@@ -41,13 +45,30 @@ def charger_comptes() -> list[str]:
     return comptes
 
 
-def deja_traites() -> set[str]:
-    """Permet de reprendre là où on s'est arrêté."""
+def lire_historique() -> tuple[dict[str, datetime], int]:
+    """Renvoie la date de dernière confirmation de chaque compte
+    et le nombre de blocages effectués aujourd'hui."""
+    historique: dict[str, datetime] = {}
+    bloques_aujourdhui = 0
     if not Path(FICHIER_RESULTATS).exists():
-        return set()
+        return historique, 0
+
     with open(FICHIER_RESULTATS, encoding="utf-8") as f:
-        return {r["compte"] for r in csv.DictReader(f)
-                if r["statut"] in ("bloqué", "déjà bloqué", "introuvable")}
+        for r in csv.DictReader(f):
+            d = datetime.fromisoformat(r["date"])
+            if r["statut"] in STATUTS_OK:
+                historique[r["compte"]] = d
+            if r["statut"] == "bloqué" and d.date() == date.today():
+                bloques_aujourdhui += 1
+    return historique, bloques_aujourdhui
+
+
+def comptes_a_traiter(comptes: list[str], historique: dict[str, datetime]) -> list[str]:
+    """Priorité aux comptes jamais traités, puis à ceux à revérifier."""
+    limite = datetime.now() - timedelta(days=REVERIF_JOURS)
+    jamais = [c for c in comptes if c not in historique]
+    a_reverifier = [c for c in comptes if c in historique and historique[c] < limite]
+    return jamais + a_reverifier
 
 
 def log_resultat(compte: str, statut: str, detail: str = ""):
@@ -138,14 +159,29 @@ def bloquer(page, compte: str) -> tuple[str, str]:
 
 
 def main():
-    comptes = [c for c in charger_comptes() if c not in deja_traites()]
-    print(f"{len(comptes)} compte(s) à traiter.")
+    tous = charger_comptes()
+    historique, bloques_aujourdhui = lire_historique()
+    file_attente = comptes_a_traiter(tous, historique)
+    quota = MAX_PAR_JOUR - bloques_aujourdhui
+
+    faits = sum(1 for c in tous if c in historique)
+    print(f"📊 Avancement : {faits}/{len(tous)} comptes traités")
+    print(f"   Aujourd'hui : {bloques_aujourdhui}/{MAX_PAR_JOUR} blocages")
+
+    if not file_attente:
+        print("✅ Tous les comptes sont à jour. Rien à faire.")
+        return
+    if quota <= 0:
+        print("⏸️  Quota du jour atteint. Relancez demain.")
+        return
+
+    print(f"   À traiter : {len(file_attente)} compte(s), quota restant : {quota}\n")
 
     with sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
             DOSSIER_SESSION,
             channel="chrome",
-            headless=False,
+            headless=HEADLESS,
             locale="fr-FR",
             viewport={"width": 1280, "height": 900},
             args=["--disable-blink-features=AutomationControlled"],
@@ -155,28 +191,48 @@ def main():
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        verifier_connexion(page)
 
-        for i, compte in enumerate(comptes[:MAX_PAR_SESSION], 1):
-            print(f"\n({i}/{min(len(comptes), MAX_PAR_SESSION)}) @{compte}")
-            try:
-                statut, detail = bloquer(page, compte)
-            except PWTimeout as e:
-                statut, detail = "erreur", "timeout"
-                page.screenshot(path=f"erreur_{compte}.png")
-            except Exception as e:
-                statut, detail = "erreur", str(e)[:150]
-                page.screenshot(path=f"erreur_{compte}.png")
-            log_resultat(compte, statut, detail)
+        try:
+            verifier_connexion(page)
 
-            # Si Instagram signale une limitation, on s'arrête
-            if "Réessayez plus tard" in page.content() or "Try Again Later" in page.content():
-                print("Instagram limite les actions. Arrêt — réessayez dans quelques heures.")
-                break
+            bloques_session = 0
+            for compte in file_attente:
+                if bloques_session >= quota:
+                    print("\n⏸️  Quota du jour atteint.")
+                    break
 
-            time.sleep(random.uniform(DELAI_MIN, DELAI_MAX))
+                print(f"\n@{compte}")
+                try:
+                    statut, detail = bloquer(page, compte)
+                except PWTimeout:
+                    statut, detail = "erreur", "timeout"
+                    page.screenshot(path=f"erreur_{compte}.png")
+                except Exception as e:
+                    statut, detail = "erreur", str(e)[:150]
+                    page.screenshot(path=f"erreur_{compte}.png")
+                log_resultat(compte, statut, detail)
 
-        ctx.close()
+                if statut == "bloqué":
+                    bloques_session += 1
+
+                if "Réessayez plus tard" in page.content() or "Try Again Later" in page.content():
+                    print("⚠️ Instagram limite les actions. Arrêt, réessayez demain.")
+                    break
+
+                time.sleep(random.uniform(DELAI_MIN, DELAI_MAX))
+        finally:
+            # Fermeture propre pour que la session soit bien sauvegardée,
+            # même en cas d'interruption (Ctrl+C) ou d'erreur
+            ctx.close()
+
+    # Estimation du temps restant
+    historique, _ = lire_historique()
+    restants = len(comptes_a_traiter(tous, historique))
+    if restants:
+        jours = math.ceil(restants / MAX_PAR_JOUR)
+        print(f"\n📅 Encore {restants} compte(s), environ {jours} jour(s). Relancez demain.")
+    else:
+        print("\n🎉 Tous les comptes sont bloqués !")
 
 
 if __name__ == "__main__":
